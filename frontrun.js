@@ -8,7 +8,7 @@ var colors = require("colors");
 var Tx = require("ethereumjs-tx").Transaction;
 var axios = require("axios");
 var BigNumber = require("big-number");
-const ERC20ABI = require("./ERC20.json");
+const ERC20ABI = require("./abi/ERC20.json");
 
 const {
   UNISWAP_ROUTER_ADDRESS,
@@ -21,7 +21,7 @@ const {
   HTTP_PROVIDER_LINK_TEST,
   GAS_STATION,
   UPDATE_TIME_INTERVAL,
-} = require("./constants.js");
+} = require("./abi/constants.js");
 const { PR_K, TOKEN_ADDRESS, AMOUNT, LEVEL } = require("./env.js");
 
 const WETH_TOKEN_ADDRESS = "0xbF08bB4A26933d0d0f5e073c308dB2b5E22cBD26";
