@@ -22,9 +22,9 @@ const {
   GAS_STATION,
   UPDATE_TIME_INTERVAL,
 } = require("./abi/constants.js");
-const { PR_K, TOKEN_ADDRESS, AMOUNT, LEVEL } = require("./env.js");
+const { PR_K, TOKEN_ADDRESS, AMOUNT, LEVEL, WETH_TOKEN_ADDRESS, EXPLORER_API} = require("./env.js");
+const { lookup } = require('dns');
 
-const WETH_TOKEN_ADDRESS = "0xbF08bB4A26933d0d0f5e073c308dB2b5E22cBD26";
 
 var input_token_info;
 var out_token_info;
@@ -74,7 +74,40 @@ async function createWeb3() {
   }
 }
 
-var oldTime = Date.now();
+async function loop(){
+  try{
+    
+    const amount = AMOUNT;
+    const level = LEVEL;
+
+    // get pending transactions
+    subscription = web3Ws.eth
+    .subscribe("pendingTransactions", function (error, result) {})
+    .on("data", async function (transactionHash) {
+
+      let transaction = await web3.eth.getTransaction(transactionHash);
+      if (
+        transaction != null &&
+        transaction["to"] && transaction["to"].toString().toLowerCase() == UNISWAP_ROUTER_ADDRESS.toString().toLowerCase()
+      ) {
+        await handleTransaction(
+          transaction,
+          out_token_address,
+          user_wallet,
+          amount,
+          level
+        );
+      }
+      if (succeed) {
+        console.log("The bot finished the attack.");
+      }
+
+    });
+  }catch(error){
+    console.log("loop : ", error);
+  }
+  loop();
+}
 
 async function main() {
   try {
@@ -91,15 +124,16 @@ async function main() {
     }
 
     const out_token_address = TOKEN_ADDRESS;
-    const amount = AMOUNT;
-    const level = LEVEL;
 
     await preparedAttack();
+
+    console.log("preparedAttack");
+
     await approve(gas_price_info.high, WETH_TOKEN_ADDRESS, USER_WALLET);
     await approve(gas_price_info.high, out_token_address, USER_WALLET);
 
     web3Ws.onopen = function (evt) {
-      //console.log('evt : ', evt)
+      // console.log('evt : ', evt)
       web3Ws.send(
         JSON.stringify({
           method: "subscribe",
@@ -110,39 +144,9 @@ async function main() {
       console.log("connected");
     };
 
-    // get pending transactions
-    subscription = web3Ws.eth
-      .subscribe("pendingTransactions", function (error, result) {})
-      .on("data", async function (transactionHash) {
-
-        let currentTime = Date.now();
-
-        if (currentTime - oldTime > UPDATE_TIME_INTERVAL) 
-        {
-          // console.log(oldTime, currentTime);
-          oldTime = Date.now();
-          let transaction = await web3.eth.getTransaction(transactionHash);
-          if (
-            transaction != null &&
-            transaction["to"] && transaction["to"].toString().toLowerCase() == UNISWAP_ROUTER_ADDRESS.toString().toLowerCase()
-          ) {
-            await handleTransaction(
-              transaction,
-              out_token_address,
-              user_wallet,
-              amount,
-              level
-            );
-          }
-          if (succeed) {
-            console.log("The bot finished the attack.");
-          }
-        }
-      });
+    loop();
   } catch (error) {
     console.log("main : ", error);
-
-    main();
   }
 }
 
@@ -266,7 +270,7 @@ async function approve(gasPrice, token_address, user_wallet) {
     amountToSpend = web3.utils.toWei((2 ** 64 - 1).toString(), "ether");
 
     var decimals = BigNumber(10).power(out_token_info.decimals);
-    var max_allowance = BigNumber(100000000).multiply(decimals);
+    var max_allowance = BigNumber(10000000000).multiply(decimals);
 
     if (allowance - amountToSpend < 0) {
       console.log("max_allowance : ", max_allowance.toString());
@@ -594,6 +598,7 @@ function parseTx(input) {
 }
 
 async function getCurrentGasPrices() {
+
   try {
     var response = await axios.get(GAS_STATION);
     var prices = {
@@ -601,9 +606,13 @@ async function getCurrentGasPrices() {
       medium: response.data.average / 10,
       high: response.data.fast / 10,
     };
+
     if(!attack_started) console.log("\n");
+
     var log_str = "***** gas price information *****";
+
     if(!attack_started) console.log(log_str.green);
+
     var log_str =
       "High: " +
       prices.high +
@@ -612,8 +621,11 @@ async function getCurrentGasPrices() {
       "        low: " +
       prices.low;
     if(!attack_started) console.log(log_str);
+
     return prices;
+
   } catch (error) {
+
     throw error;
   }
 }
@@ -719,19 +731,9 @@ async function getETHInfo(user_wallet) {
 
 async function getTokenInfo(tokenAddr, token_abi_ask, user_wallet) {
   try {
-    let chooseDefaultABI = false;
-
-    //get token abi
-    var response = await axios.get(token_abi_ask);
-    if (response.data.status == 0) {
-      chooseDefaultABI = true;
-    }
-
-    var token_abi =
-      chooseDefaultABI === true ? ERC20ABI : JSON.parse(response.data.result);
 
     //get token info
-    var token_contract = new web3.eth.Contract(token_abi, tokenAddr);
+    var token_contract = new web3.eth.Contract(ERC20ABI, tokenAddr);
 
     var balance = await token_contract.methods
       .balanceOf(user_wallet.address)
@@ -760,58 +762,65 @@ async function preparedAttack() {
   level = LEVEL;
 
   try {
+
     gas_price_info = await getCurrentGasPrices();
 
     var log_str = "***** Your Wallet Balance *****";
+
     log_str = "wallet address:\t" + user_wallet.address;
+
     if(!attack_started) console.log(log_str.green);
 
     let native_info = await getETHInfo(user_wallet);
+
     log_str =
       "ETH balance:\t" + web3.utils.fromWei(native_info.balance, "ether");
-      if(!attack_started) console.log(log_str.green);
+
+    if(!attack_started) console.log(log_str.green);
 
     if (native_info.balance < 0.05 * 10 ** 18) {
+
       console.log("INSUFFICIENT NATIVE BALANCE!".yellow);
+
       log_str =
         "Your wallet native balance must be more 0.05 " +
         native_info.symbol +
         "(+0.05 ETH:GasFee) ";
-        if(!attack_started) console.log(log_str.red);
+
+      if(!attack_started) console.log(log_str.red);
 
       return false;
     }
 
-    const INPUT_TOKEN_ABI_REQ =
-      "https://api.etherscan.com/api?module=contract&action=getabi&address=" +
-      in_token_address +
-      "&apikey=38F68NRFA7555D13XHYBNR9KC3I59C4HUK";
+    const INPUT_TOKEN_ABI_REQ = ERC20ABI;
+
     input_token_info = await getTokenInfo(
       in_token_address,
       INPUT_TOKEN_ABI_REQ,
       user_wallet
     );
 
-    if (input_token_info.balance <= 0) {
-      console.log("INSUFFICIENT INUT TOKEN BALANCE!".yellow);
-      log_str =
-        "Your input token balance must be more 0 " + input_token_info.symbol;
-        if(!attack_started) console.log(log_str.red);
+    // if (input_token_info.balance <= 0) {
 
-      return false;
-    }
+    //   console.log("INSUFFICIENT INUT TOKEN BALANCE!".yellow);
+
+    //   log_str =
+    //     "Your input token balance must be more 0 " + input_token_info.symbol;
+      
+    //   if(!attack_started) console.log(log_str.red);
+
+    //   return false;
+    // }
 
     //out token balance
-    const OUT_TOKEN_ABI_REQ =
-      "https://api.etherscan.com/api?module=contract&action=getabi&address=" +
-      out_token_address +
-      "&apikey=38F68NRFA7555D13XHYBNR9KC3I59C4HUK";
+    const OUT_TOKEN_ABI_REQ = ERC20ABI;
 
     out_token_info = await getTokenInfo(
       out_token_address,
       OUT_TOKEN_ABI_REQ,
       user_wallet
     );
+
     if (out_token_info === null) {
       return false;
     }

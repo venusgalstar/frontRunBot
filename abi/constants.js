@@ -10,14 +10,11 @@ const UNISWAP_ROUTER_ABI = [{"inputs":[{"internalType":"address","name":"_factor
 // Preconfigured for Etherum and Uniswap
 
 // To use with Uniswap use infura endpoint and configure Uniswap ABIs above. 
-const HTTP_PROVIDER_LINK = "https://nd-785-795-520.p2pify.com/9d5e815ae42827d7a7d07ab09db047f5";
-/// "https://warp-nd-539-220-747.p2pify.com/240492355166d5055224b02ff4f2b2c7"; //chainstack ETH mainnet
-/// "https://nd-785-795-520.p2pify.com/9d5e815ae42827d7a7d07ab09db047f5"; //chainstack Ropesten testnet
-/// "https://mainnet.infura.io/v3/9dd88b07c58d4af3998955cf0808a9e9"; //infura ETH mainnet
+const HTTP_PROVIDER_LINK = "https://eth-goerli.nodereal.io/v1/7948185aab894850ba9c624f646015ff";
+/// "https://eth-mainnet.nodereal.io/v1/7948185aab894850ba9c624f646015ff"; //nodereal.io
 
-const WEBSOCKET_PROVIDER_LINK = "wss://ws-nd-785-795-520.p2pify.com/9d5e815ae42827d7a7d07ab09db047f5";
-/// "wss://mainnet.infura.io/ws/v3/9dd88b07c58d4af3998955cf0808a9e9"; //infura ETH mainnet
-/// "wss://ws-nd-785-795-520.p2pify.com/9d5e815ae42827d7a7d07ab09db047f5"; //chainstack Ropesten testnet
+const WEBSOCKET_PROVIDER_LINK = "wss://eth-goerli.nodereal.io/ws/v1/7948185aab894850ba9c624f646015ff";
+/// "https://eth-goerli.nodereal.io/v1/7948185aab894850ba9c624f646015ff"; //nodereal.io
 
 const GAS_STATION = 'https://ethgasstation.info/json/ethgasAPI.json'
 
