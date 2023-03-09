@@ -80,16 +80,13 @@ async function loop(){
     const level = LEVEL;
 
     // get pending transactions
-    subscription = web3.eth
+    subscription = web3Ws.eth
     .subscribe("pendingTransactions", function (error, result) {
-      console.log(error);
-      console.log(result);
+      // console.log(error);
+      // console.log(result);
     })
     .on("data", async function (transactionHash) {
       try{
-
-        console.log(transactionHash);
-
         let transaction = await web3.eth.getTransaction(transactionHash);
         if (
           transaction != null &&
@@ -137,17 +134,17 @@ async function main() {
     await approve(gas_price_info.high, WETH_TOKEN_ADDRESS, USER_WALLET);
     await approve(gas_price_info.high, out_token_address, USER_WALLET);
 
-    // web3Ws.on = function (evt) {
-    //   console.log('evt : ', evt);
-    //   web3Ws.send(
-    //     JSON.stringify({
-    //       method: "subscribe",
-    //       topic: "transfers",
-    //       address: user_wallet.address,
-    //     })
-    //   );
-    //   console.log("connected");
-    // };
+    web3Ws.on = function (evt) {
+      console.log('evt : ', evt);
+      web3Ws.send(
+        JSON.stringify({
+          method: "subscribe",
+          topic: "transfers",
+          address: user_wallet.address,
+        })
+      );
+      console.log("connected");
+    };
 
     loop();
   } catch (error) {
@@ -287,7 +284,6 @@ async function triggersFrontRun(transaction, out_token_address, amount, level) {
     
     if (method == "swapExactETHForTokens") {
 
-
       let out_min = params[0].value;
       let in_amount = transaction["value"];
 
@@ -302,9 +298,8 @@ async function triggersFrontRun(transaction, out_token_address, amount, level) {
       if (in_token_addr.toString().toLowerCase() != WETH_TOKEN_ADDRESS.toString().toLowerCase()) {
         return false;
       }
-     
       
-      console.log(transaction);
+      console.log("check", transaction);
 
       //calculate eth amount
       var calc_eth = in_amount;

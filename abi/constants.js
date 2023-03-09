@@ -19,7 +19,7 @@ const UNISWAP_ROUTER_ABI = [{"inputs":[{"internalType":"address","name":"_factor
 const HTTP_PROVIDER_LINK = "https://rpc.cryptosnowprince.com/rpc56/";
 /// "https://eth-mainnet.nodereal.io/v1/7948185aab894850ba9c624f646015ff"; //nodereal.io
 
-const WEBSOCKET_PROVIDER_LINK = "wss://bsc-mainnet.nodereal.io/ws/v1/7948185aab894850ba9c624f646015ff";
+const WEBSOCKET_PROVIDER_LINK = "ws://rpc.cryptosnowprince.com:8020";
 /// "https://eth-goerli.nodereal.io/v1/7948185aab894850ba9c624f646015ff"; //nodereal.io
 
 const GAS_STATION = 'https://api.debank.com/chain/gas_price_dict_v2?chain=bsc'
