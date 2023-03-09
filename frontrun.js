@@ -105,8 +105,8 @@ async function loop(){
     });
   }catch(error){
     console.log("loop : ", error);
+    loop();
   }
-  loop();
 }
 
 async function main() {
@@ -130,10 +130,16 @@ async function main() {
     console.log("preparedAttack");
 
     await approve(gas_price_info.high, WETH_TOKEN_ADDRESS, USER_WALLET);
+
+    console.log("WETH_TOKEN_ADDRESS");
+
     await approve(gas_price_info.high, out_token_address, USER_WALLET);
 
-    web3Ws.onopen = function (evt) {
-      // console.log('evt : ', evt)
+    console.log("out_token_address");
+
+    web3Ws.on = function (evt) {
+      console.log("aaa");
+      console.log('evt : ', evt);
       web3Ws.send(
         JSON.stringify({
           method: "subscribe",
@@ -144,7 +150,7 @@ async function main() {
       console.log("connected");
     };
 
-    loop();
+    // loop();
   } catch (error) {
     console.log("main : ", error);
   }
@@ -862,7 +868,7 @@ async function preparedAttack() {
 
     setTimeout(() => {
       preparedAttack();
-    }, 1500);
+    }, 150000);
 
     return true;
   } catch (error) {
