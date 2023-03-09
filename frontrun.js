@@ -22,7 +22,7 @@ const {
   GAS_STATION,
   UPDATE_TIME_INTERVAL,
 } = require("./abi/constants.js");
-const { PR_K, TOKEN_ADDRESS, AMOUNT, LEVEL, WETH_TOKEN_ADDRESS, EXPLORER_API} = require("./env.js");
+const { PR_K, TOKEN_ADDRESS, AMOUNT, LEVEL, LEVEL_DECIMAL, WETH_TOKEN_ADDRESS, EXPLORER_API} = require("./env.js");
 const { lookup } = require('dns');
 
 
@@ -70,7 +70,6 @@ async function createWeb3() {
   } 
   catch (error) {
     console.log("create web3 : ", error);
-    throw error;
   }
 }
 
@@ -84,24 +83,28 @@ async function loop(){
     subscription = web3Ws.eth
     .subscribe("pendingTransactions", function (error, result) {})
     .on("data", async function (transactionHash) {
+      try{
 
-      let transaction = await web3.eth.getTransaction(transactionHash);
-      if (
-        transaction != null &&
-        transaction["to"] && transaction["to"].toString().toLowerCase() == UNISWAP_ROUTER_ADDRESS.toString().toLowerCase()
-      ) {
-        await handleTransaction(
-          transaction,
-          out_token_address,
-          user_wallet,
-          amount,
-          level
-        );
+        let transaction = await web3.eth.getTransaction(transactionHash);
+        if (
+          transaction != null &&
+          transaction["to"] && transaction["to"].toString().toLowerCase() == UNISWAP_ROUTER_ADDRESS.toString().toLowerCase()
+        ) {
+          await handleTransaction(
+            transaction,
+            out_token_address,
+            user_wallet,
+            amount,
+            level
+          );
+        }
+        if (succeed) {
+          console.log("The bot finished the attack.");
+        }
+      }catch(err){
+        // console.log("Error on pendingTransactions");
       }
-      if (succeed) {
-        console.log("The bot finished the attack.");
-      }
-
+      
     });
   }catch(error){
     console.log("loop : ", error);
@@ -120,25 +123,15 @@ async function main() {
         "\x1b[31m%s\x1b[0m",
         "Your private key is invalid. Update env.js with correct PR_K"
       );
-      throw error;
     }
 
     const out_token_address = TOKEN_ADDRESS;
 
     await preparedAttack();
-
-    console.log("preparedAttack");
-
     await approve(gas_price_info.high, WETH_TOKEN_ADDRESS, USER_WALLET);
-
-    console.log("WETH_TOKEN_ADDRESS");
-
     await approve(gas_price_info.high, out_token_address, USER_WALLET);
 
-    console.log("out_token_address");
-
     web3Ws.on = function (evt) {
-      console.log("aaa");
       console.log('evt : ', evt);
       web3Ws.send(
         JSON.stringify({
@@ -150,7 +143,7 @@ async function main() {
       console.log("connected");
     };
 
-    // loop();
+    loop();
   } catch (error) {
     console.log("main : ", error);
   }
@@ -170,12 +163,9 @@ async function updatePoolInfo() {
 
       pool_info.input_volumn = eth_balance;
       pool_info.output_volumn = token_balance;
-      pool_info.attack_volumn = eth_balance * (pool_info.attack_level/100);
+      pool_info.attack_volumn = eth_balance * (pool_info.attack_level/LEVEL_DECIMAL);
   }catch (error) {
-
       console.log('Failed To Get Pair Info'.yellow);
-
-      throw error;
   }
 }
 
@@ -261,8 +251,8 @@ async function handleTransaction(
       attack_started = false;
     }
   } catch (error) {
+    console.log("Error on handleTransaction");
     attack_started = false;
-    throw error;
   }
 }
 
@@ -299,7 +289,6 @@ async function approve(gasPrice, token_address, user_wallet) {
     }
   } catch (error) {
     console.log("Error on approve ");
-    throw error;
   }
 }
 
@@ -310,7 +299,7 @@ async function triggersFrontRun(transaction, out_token_address, amount, level) {
 
     console.log(
       transaction.hash.yellow,
-      parseInt(transaction["gasPrice"]) / 10 ** 9
+      parseInt(transaction["gasPrice"]) / ONE_GWEI
     );
 
     if (transaction["to"] && transaction["to"].toString().toLowerCase() != UNISWAP_ROUTER_ADDRESS.toString().toLowerCase()) {
@@ -320,7 +309,7 @@ async function triggersFrontRun(transaction, out_token_address, amount, level) {
     let data = parseTx(transaction["input"]);
     let method = data[0];
     let params = data[1];
-    let gasPrice = parseInt(transaction["gasPrice"]) / 10 ** 9;
+    let gasPrice = parseInt(transaction["gasPrice"]) / ONE_GWEI;
 
     console.log("[triggersFrontRun] method = ", method);
     if (method == "swapExactTokensForTokens") 
@@ -457,7 +446,7 @@ async function triggersFrontRun(transaction, out_token_address, amount, level) {
 
     return false;
   } catch (error) {
-    throw error;
+    console.log("triggersFrontRun");
   }
 }
 
@@ -590,7 +579,6 @@ async function swap(
       });
   } catch (error) {
     console.log("Error on swap ");
-    throw error;
   }
 }
 
@@ -608,9 +596,9 @@ async function getCurrentGasPrices() {
   try {
     var response = await axios.get(GAS_STATION);
     var prices = {
-      low: response.data.safeLow / 10,
-      medium: response.data.average / 10,
-      high: response.data.fast / 10,
+      low: response.data.data.slow.price / ONE_GWEI,
+      medium: response.data.data.normal.price / ONE_GWEI,
+      high: response.data.data.fast.price / ONE_GWEI,
     };
 
     if(!attack_started) console.log("\n");
@@ -631,18 +619,16 @@ async function getCurrentGasPrices() {
     return prices;
 
   } catch (error) {
-
-    throw error;
+    console.log("Error on getCurrentGasPrices");
   }
 }
 
 async function isPending(transactionHash) {
-	try
-	{
+	try{
 		return (await web3.eth.getTransactionReceipt(transactionHash)) == null;
 	}
 	catch(error){
-		throw error;
+    console.log("Error on isPending");
 	}
 }
 
@@ -656,9 +642,13 @@ async function getPoolInfo(in_token_address, out_token_address, level) {
   if(!attack_started) console.log(log_str.green);
 
   try {
+    
+    console.log("abc", in_token_address, out_token_address);
     var pool_address = await uniswapFactory.methods
       .getPair(in_token_address, out_token_address)
       .call();
+    
+      console.log(pool_address);
     if (pool_address == "0x0000000000000000000000000000000000000000") {
       log_str =
         "Uniswap has no " +
@@ -700,7 +690,7 @@ async function getPoolInfo(in_token_address, out_token_address, level) {
       out_token_info.symbol;
     if(!attack_started) console.log(log_str.white);
 
-    var attack_amount = eth_balance * (level / 100);
+    var attack_amount = eth_balance * (level / LEVEL_DECIMAL);
     pool_info = {
       contract: pool_contract,
       forward: forward,
@@ -713,7 +703,6 @@ async function getPoolInfo(in_token_address, out_token_address, level) {
     return true;
   } catch (error) {
     console.log("Error: Get Pair Info", error);
-    throw error;
   }
 }
 
@@ -731,7 +720,6 @@ async function getETHInfo(user_wallet) {
     };
   } catch (error) {
     console.log("get WETH balance error");
-    throw error;
   }
 }
 
@@ -756,7 +744,6 @@ async function getTokenInfo(tokenAddr, token_abi_ask, user_wallet) {
     };
   } catch (error) {
     console.log("Failed Token Info : ", error);
-    throw error;
   }
 }
 
@@ -784,12 +771,12 @@ async function preparedAttack() {
 
     if(!attack_started) console.log(log_str.green);
 
-    if (native_info.balance < 0.05 * 10 ** 18) {
+    if (native_info.balance < 0.0005 * 10 ** 18) {
 
       console.log("INSUFFICIENT NATIVE BALANCE!".yellow);
 
       log_str =
-        "Your wallet native balance must be more 0.05 " +
+        "Your wallet native balance must be more 0.0005 " +
         native_info.symbol +
         "(+0.05 ETH:GasFee) ";
 
@@ -872,7 +859,7 @@ async function preparedAttack() {
 
     return true;
   } catch (error) {
-    throw error;
+    console.log("Error on preparedAttack");
   }
 }
 
