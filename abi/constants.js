@@ -16,7 +16,7 @@ const UNISWAP_ROUTER_ABI = [{"inputs":[{"internalType":"address","name":"_factor
 // Preconfigured for Etherum and Uniswap
 
 // To use with Uniswap use infura endpoint and configure Uniswap ABIs above. 
-const HTTP_PROVIDER_LINK = "https://bsc-mainnet.nodereal.io/v1/7948185aab894850ba9c624f646015ff";
+const HTTP_PROVIDER_LINK = "https://rpc.cryptosnowprince.com/rpc56/";
 /// "https://eth-mainnet.nodereal.io/v1/7948185aab894850ba9c624f646015ff"; //nodereal.io
 
 const WEBSOCKET_PROVIDER_LINK = "wss://bsc-mainnet.nodereal.io/ws/v1/7948185aab894850ba9c624f646015ff";
