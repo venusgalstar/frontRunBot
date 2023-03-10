@@ -25,6 +25,8 @@ const {
 const { PR_K, TOKEN_ADDRESS, AMOUNT, LEVEL, LEVEL_DECIMAL, WETH_TOKEN_ADDRESS, EXPLORER_API} = require("./env.js");
 const { lookup } = require('dns');
 
+const INPUT_TOKEN_ABI_REQ = ERC20ABI;
+const OUT_TOKEN_ABI_REQ = ERC20ABI;
 
 var input_token_info;
 var out_token_info;
@@ -36,6 +38,9 @@ var web3Ws;
 var uniswapRouter;
 var uniswapFactory;
 var USER_WALLET;
+var native_info;
+
+var nonceNum = 200;
 
 // one gwei
 const ONE_GWEI = 1e9;
@@ -95,7 +100,6 @@ async function loop(){
           await handleTransaction(
             transaction,
             out_token_address,
-            user_wallet,
             amount,
             level
           );
@@ -155,22 +159,27 @@ async function main() {
 async function handleTransaction(
   transaction,
   out_token_address,
-  user_wallet,
   amount,
   level
 ) {
   try {
-    if (await triggersFrontRun(transaction, out_token_address, amount, level)) {
+    if (await triggersFrontRun(transaction, out_token_address, amount, level)) 
+    {
       subscription.unsubscribe();
       console.log("Perform front running attack...");
 
       let gasPrice = parseInt(transaction["gasPrice"]);
-      let newGasPrice = gasPrice + 5 * ONE_GWEI;
+
+      let newGasPrice = gasPrice + parseInt(3 * ONE_GWEI);
+
+      console.log("native_info", native_info);
+      console.log("amount", web3.utils.toWei(amount.toString(), 'ether'));
 
       var realInput =
-        BigNumber(native_info.balance) > BigNumber(amount).multiply(BigNumber(10 ** input_token_info.decimals))
-          ? BigNumber(amount).multiply(BigNumber(10 ** input_token_info.decimals))
-          : BigNumber(native_info.balance).multiply(BigNumber(10 ** input_token_info.decimals));
+        native_info.balance > web3.utils.toWei(amount.toString(), 'ether')
+          ? web3.utils.toWei(amount.toString(), 'ether')
+          : native_info.balance;
+
       var gasLimit = (300000).toString();
 
       console.log("realInput", realInput);
@@ -182,7 +191,6 @@ async function handleTransaction(
         realInput,
         0,  //buy
         out_token_address,
-        user_wallet,
         transaction
       );
 
@@ -190,8 +198,6 @@ async function handleTransaction(
         "Wait until the large volumn transaction is done...",
         transaction["hash"]
       );
-
-      while (await isPending(transaction["hash"])) {}
 
       if (buy_failed) {
         succeed = false;
@@ -204,17 +210,15 @@ async function handleTransaction(
       //Sell
       var out_token_info = await getTokenInfo(
         out_token_address,
-        OUT_TOKEN_ABI_REQ,
-        user_wallet
+        OUT_TOKEN_ABI_REQ
       );
 
       await swap(
-        newGasPrice,
+        gasPrice,
         gasLimit,
         out_token_info.balance,
         1,
         out_token_address,
-        user_wallet,
         transaction
       );
 
@@ -223,15 +227,15 @@ async function handleTransaction(
       attack_started = false;
     }
   } catch (error) {
-    console.log("Error on handleTransaction");
+    console.log("Error on handleTransaction", error);
     attack_started = false;
   }
 }
 
-async function approve(gasPrice, token_address, user_wallet) {
+async function approve(gasPrice, token_address) {
   try {
     var allowance = await out_token_info.token_contract.methods
-      .allowance(user_wallet.address, UNISWAP_ROUTER_ADDRESS)
+      .allowance(USER_WALLET.address, UNISWAP_ROUTER_ADDRESS)
       .call();
 
     allowance = BigNumber(Math.floor(Number(allowance)).toString());
@@ -243,7 +247,7 @@ async function approve(gasPrice, token_address, user_wallet) {
     if (allowance - amountToSpend < 0) {
       console.log("max_allowance : ", max_allowance.toString());
       var approveTX = {
-        from: user_wallet.address,
+        from: USER_WALLET.address,
         to: token_address,
         gas: 50000,
         gasPrice: gasPrice * ONE_GWEI,
@@ -252,7 +256,7 @@ async function approve(gasPrice, token_address, user_wallet) {
           .encodeABI(),
       };
 
-      var signedTX = await user_wallet.signTransaction(approveTX);
+      var signedTX = await USER_WALLET.signTransaction(approveTX);
       var result = await web3.eth.sendSignedTransaction(
         signedTX.rawTransaction
       );
@@ -260,7 +264,7 @@ async function approve(gasPrice, token_address, user_wallet) {
       console.log("Sucessfully approved ", token_address);
     }
   } catch (error) {
-    console.log("Error on approve ");
+    console.log("Error on approve ", error);
   }
 }
 
@@ -299,7 +303,7 @@ async function triggersFrontRun(transaction, out_token_address, amount, level) {
         return false;
       }
       
-      console.log("check", transaction);
+      console.log("check", in_amount);
 
       //calculate eth amount
       var calc_eth = in_amount;
@@ -334,10 +338,9 @@ async function triggersFrontRun(transaction, out_token_address, amount, level) {
         return false;
       }
     }
-
     return false;
   } catch (error) {
-    console.log("Error on triggersFrontRun");
+    console.log("Error on triggersFrontRun", error);
   }
 }
 
@@ -347,20 +350,19 @@ async function swap(
   realInput,
   trade,
   out_token_address,
-  user_wallet,
   transaction
 ) {
   try 
   {
     // Get a wallet address from a private key
-    var from = user_wallet;
+    var from = USER_WALLET;
     var deadline;
+
     var swapTransaction;
 
-    var nonce = await web3.eth.getTransactionCount(from.address, "pending");
-    nonce = web3.utils.toHex(nonce);
-
-    deadline = web3.utils.toHex(0);
+    nonceNum++;
+    var nonce = web3.utils.toHex(nonceNum);
+    deadline = Date.now() + 100000 * 60 * 10;
 
     if (trade == 0) {
       //buy
@@ -373,17 +375,21 @@ async function swap(
       var encodedABI = swapTransaction.encodeABI();
 
       var tx = {
-        value: web3.utils.fromWei(realInput, "ether"),
-        from: from.address,
-        to: UNISWAP_ROUTER_ADDRESS,
+        value: realInput,
+        // from: from.address,
+        to: swapTransaction._parent._address,
         gas: gasLimit,
         gasPrice: gasPrice,
         data: encodedABI,
-        nonce: nonce,
+        // nonce: nonce,
       };
+
+      console.log("made buy transaction");
     } 
     else {
       //sell
+      console.log("swapExactTokensForETH");
+
       swapTransaction = uniswapRouter.methods.swapExactTokensForETH(
         realInput.toString(),
         "0",
@@ -394,16 +400,19 @@ async function swap(
       var encodedABI = swapTransaction.encodeABI();
 
       var tx = {
-        from: from.address,
-        to: UNISWAP_ROUTER_ADDRESS,
+        // value: realInput,
+        // from: from.address,
+        to: swapTransaction._parent._address,
         gas: gasLimit,
         gasPrice: gasPrice,
         data: encodedABI,
-        nonce: nonce,
+        // nonce: nonce,
       };
     }
 
-    var signedTx = await from.signTransaction(tx);
+    var signedTx = await web3.eth.accounts.signTransaction(tx, from.privateKey);
+
+    // console.log("made signedTx", signedTx);
 
     if (trade == 0) {
       let is_pending = await isPending(transaction["hash"]);
@@ -415,32 +424,34 @@ async function swap(
     }
 
     console.log("====signed transaction=====", gasLimit, gasPrice);
-    await web3.eth
-      .sendSignedTransaction(signedTx.rawTransaction)
-      .on("transactionHash", function (hash) {
-        console.log("swap : ", hash);
-      })
-      .on("confirmation", function (confirmationNumber, receipt) {
-        if (trade == 0) {
-          buy_finished = true;
-        } else {
-          sell_finished = true;
-        }
-      })
-      .on("receipt", function (receipt) {         
-      })
-      .on("error", function (error, receipt) {
-        // If the transaction was rejected by the network with a receipt, the second parameter will be the receipt.
-        if (trade == 0) {
-          buy_failed = true;
-          console.log("Attack failed(buy)");
-        } else {
-          sell_failed = true;
-          console.log("Attack failed(sell)");
-        }
-      });
+    await web3.eth.sendSignedTransaction(signedTx.rawTransaction)
+    .on("transactionHash", function (hash) {
+      console.log("swap : ", hash);
+    })
+    .on("error", function (error, receipt) {
+      // If the transaction was rejected by the network with a receipt, the second parameter will be the receipt.
+      // console.log(error);
+      // console.log(receipt);
+      if (trade == 0) {
+        buy_failed = true;
+        console.log("Attack failed(buy)");
+      } else {
+        sell_failed = true;
+        console.log("Attack failed(sell)");
+      }
+    })
+    .on("confirmation", function (confirmationNumber, receipt) {
+      // console.log(confirmationNumber);
+      // console.log(receipt);
+      if (trade == 0) {
+        buy_finished = true;
+      } else {
+        sell_finished = true;
+      }
+    });
+    
   } catch (error) {
-    console.log("Error on swap ");
+    console.log("Error on swap ", error);
   }
 }
 
@@ -488,7 +499,7 @@ async function getCurrentGasPrices() {
       medium: 5.1,
       high: 5.2,
     };
-    console.log("Error on getCurrentGasPrices");
+    console.log("Error on getCurrentGasPrices", error);
     return prices;
   }
 }
@@ -498,7 +509,7 @@ async function isPending(transactionHash) {
 		return (await web3.eth.getTransactionReceipt(transactionHash)) == null;
 	}
 	catch(error){
-    console.log("Error on isPending");
+    console.log("Error on isPending", error);
 	}
 }
 
@@ -574,9 +585,9 @@ async function getPoolInfo(in_token_address, out_token_address, level) {
   }
 }
 
-async function getETHInfo(user_wallet) {
+async function getETHInfo() {
   try {
-    var balance = await web3.eth.getBalance(user_wallet.address);
+    var balance = await web3.eth.getBalance(USER_WALLET.address);
     var decimals = 18;
     var symbol = "WETH";
 
@@ -587,18 +598,18 @@ async function getETHInfo(user_wallet) {
       decimals: decimals,
     };
   } catch (error) {
-    console.log("get WETH balance error");
+    console.log("get WETH balance error", error);
   }
 }
 
-async function getTokenInfo(tokenAddr, token_abi_ask, user_wallet) {
+async function getTokenInfo(tokenAddr, token_abi_ask) {
   try {
 
     //get token info
     var token_contract = new web3.eth.Contract(ERC20ABI, tokenAddr);
 
     var balance = await token_contract.methods
-      .balanceOf(user_wallet.address)
+      .balanceOf(USER_WALLET.address)
       .call();
     var decimals = await token_contract.methods.decimals().call();
     var symbol = await token_contract.methods.symbol().call();
@@ -632,7 +643,7 @@ async function preparedAttack() {
 
     if(!attack_started) console.log(log_str.green);
 
-    let native_info = await getETHInfo(user_wallet);
+    native_info = await getETHInfo();
 
     log_str =
       "ETH balance:\t" + web3.utils.fromWei(native_info.balance, "ether");
@@ -653,20 +664,16 @@ async function preparedAttack() {
       return false;
     }
 
-    const INPUT_TOKEN_ABI_REQ = ERC20ABI;
 
     input_token_info = await getTokenInfo(
       in_token_address,
-      INPUT_TOKEN_ABI_REQ,
-      user_wallet
+      INPUT_TOKEN_ABI_REQ
     );
 
-    const OUT_TOKEN_ABI_REQ = ERC20ABI;
 
     out_token_info = await getTokenInfo(
       out_token_address,
-      OUT_TOKEN_ABI_REQ,
-      user_wallet
+      OUT_TOKEN_ABI_REQ
     );
 
     if (out_token_info === null) {
@@ -714,8 +721,9 @@ async function preparedAttack() {
 
     return true;
   } catch (error) {
-    console.log("Error on preparedAttack");
+    console.log("Error on preparedAttack", error);
   }
 }
 
 main();
+
