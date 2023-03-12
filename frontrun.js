@@ -268,6 +268,30 @@ async function approve(gasPrice, token_address) {
   }
 }
 
+async function updatePoolInfo() {
+  try{
+      var reserves = await pool_info.contract.methods.getReserves().call();
+      var eth_balance;
+      var token_balance;
+
+      if(pool_info.forward) {
+          eth_balance = reserves[0];
+          token_balance = reserves[1];
+      } else {
+          eth_balance = reserves[1];
+          token_balance = reserves[0];
+      }
+
+      pool_info.input_volumn = eth_balance;
+      pool_info.output_volumn = token_balance;
+  }catch (error) {
+
+      console.log('Failed To Get Pair Info'.yellow);
+
+      throw error;
+  }
+}
+
 //select attacking transaction
 async function triggersFrontRun(transaction, out_token_address, amount, level) {
   try {
@@ -302,11 +326,11 @@ async function triggersFrontRun(transaction, out_token_address, amount, level) {
       if (in_token_addr.toString().toLowerCase() != WETH_TOKEN_ADDRESS.toString().toLowerCase()) {
         return false;
       }
-      
-      console.log("check", in_amount);
+
+      await updatePoolInfo();
 
       //calculate eth amount
-      var calc_eth = in_amount;
+      var calc_eth = calc_profit(in_amount);
 
       log_str =
         transaction["hash"] +
@@ -474,8 +498,6 @@ async function getCurrentGasPrices() {
       high: response.data.data.fast.price / ONE_GWEI,
     };
 
-    console.log(reponse);
-
     if(!attack_started) console.log("\n");
 
     var log_str = "***** gas price information *****";
@@ -499,7 +521,7 @@ async function getCurrentGasPrices() {
       medium: 5.1,
       high: 5.2,
     };
-    console.log("Error on getCurrentGasPrices", error);
+    console.log("Error on getCurrentGasPrices");
     return prices;
   }
 }
@@ -699,6 +721,9 @@ async function preparedAttack() {
     )
       return false;
 
+    console.log("input_volumn", pool_info.input_volumn);
+    console.log("output_volumn", pool_info.output_volumn);
+
     log_str =
       "=================== Prepared to attack " +
       input_token_info.symbol +
@@ -725,5 +750,46 @@ async function preparedAttack() {
   }
 }
 
-main();
+
+function calc_profit(in_amount){
+  var test_input_volume = 1586.718390400374907413;
+  var test_output_volume = 5204038.386628779152286034;
+  var test_attack_amount = 10;
+  var test_in_amount = 100;
+
+  // var test_input_volume = web3.utils.toWei(pool_info.input_volumn, 'ether'); 
+  // var test_output_volume = parseFloat(BigNumber(pool_info.output_volumn).divide(10 ** out_token_info.decimals).toString()); 
+  // var test_attack_amount = AMOUNT;
+  // var test_in_amount = web3.utils.toWei(in_amount, 'ether');
+
+  var cap = test_input_volume * test_output_volume;
+
+  console.log("test_input_volume", test_input_volume);
+  console.log("test_output_volume", test_output_volume);
+  console.log("test_attack_amount", test_attack_amount);
+  console.log("test_in_amount", test_in_amount);
+  
+  var test_input_volume_after_attack = test_input_volume + test_attack_amount * 0.9975;
+  
+  var purchased_token_amount = test_output_volume - cap / test_input_volume_after_attack;
+  
+  var test_input_volume_after_target = test_input_volume + test_attack_amount * 0.9975 + test_in_amount * 0.9975;
+  
+  var purchased_attacker_token_amount = cap / test_input_volume_after_attack - cap / test_input_volume_after_target;
+  
+  var test_output_volume_after_target = (test_output_volume - purchased_token_amount - purchased_attacker_token_amount) + purchased_token_amount * 0.9975;
+  
+  var input_profit = test_input_volume + test_attack_amount * 0.9975 + test_in_amount * 0.9975 - cap / test_output_volume_after_target - test_attack_amount;
+  
+  // console.log("cap", cap);
+  // console.log("purchased_token_amount", purchased_token_amount);
+  // console.log("purchased_attacker_token_amount", purchased_attacker_token_amount);
+  // console.log("test_output_volume_after_target", test_output_volume_after_target);
+  // console.log("input_profit", input_profit);
+  return input_profit;
+}
+
+console.log("profit", calc_profit(0.01));
+
+// main();
 
