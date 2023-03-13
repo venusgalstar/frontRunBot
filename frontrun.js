@@ -342,7 +342,7 @@ async function triggersFrontRun(transaction, out_token_address, amount, level) {
         input_token_info.symbol;
       console.log(log_str.yellow);
 
-      if (calc_eth >= pool_info.attack_volumn) {
+      if (calc_eth >= 0.0005) {
         attack_started = true;
 
         let log_str =
@@ -752,15 +752,15 @@ async function preparedAttack() {
 
 
 function calc_profit(in_amount){
-  var test_input_volume = 1586.718390400374907413;
-  var test_output_volume = 5204038.386628779152286034;
-  var test_attack_amount = 10;
-  var test_in_amount = 100;
+  // var test_input_volume = 1567.718390400374907413;
+  // var test_output_volume = 5283707.386628779152286034;
+  // var test_attack_amount = 0.1;
+  // var test_in_amount = 50;
 
-  // var test_input_volume = web3.utils.toWei(pool_info.input_volumn, 'ether'); 
-  // var test_output_volume = parseFloat(BigNumber(pool_info.output_volumn).divide(10 ** out_token_info.decimals).toString()); 
-  // var test_attack_amount = AMOUNT;
-  // var test_in_amount = web3.utils.toWei(in_amount, 'ether');
+  var test_input_volume = web3.utils.toWei(pool_info.input_volumn, 'ether'); 
+  var test_output_volume = parseFloat(BigNumber(pool_info.output_volumn).divide(10 ** out_token_info.decimals).toString()); 
+  var test_attack_amount = AMOUNT;
+  var test_in_amount = web3.utils.toWei(in_amount, 'ether');
 
   var cap = test_input_volume * test_output_volume;
 
@@ -789,7 +789,7 @@ function calc_profit(in_amount){
   return input_profit;
 }
 
-console.log("profit", calc_profit(0.01));
+// console.log("profit", calc_profit(0.01));
 
-// main();
+main();
 
