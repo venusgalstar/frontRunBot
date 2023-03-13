@@ -755,7 +755,7 @@ function calc_profit(in_amount){
   // var test_input_volume = 1567.718390400374907413;
   // var test_output_volume = 5283707.386628779152286034;
   // var test_attack_amount = 0.1;
-  // var test_in_amount = 50;
+  // var test_in_amount = 5;
 
   var test_input_volume = web3.utils.toWei(pool_info.input_volumn, 'ether'); 
   var test_output_volume = parseFloat(BigNumber(pool_info.output_volumn).divide(10 ** out_token_info.decimals).toString()); 
@@ -789,7 +789,35 @@ function calc_profit(in_amount){
   return input_profit;
 }
 
-// console.log("profit", calc_profit(0.01));
+function calc_profit_test(){
+  var test_input_volume = 1567.718390400374907413;
+  var test_output_volume = 5283707.386628779152286034;
+  var test_attack_amount = 0.1;
+  var test_in_amount = 5;
+
+  var cap = test_input_volume * test_output_volume;
+
+  console.log("test_input_volume", test_input_volume);
+  console.log("test_output_volume", test_output_volume);
+  console.log("test_attack_amount", test_attack_amount);
+  console.log("test_in_amount", test_in_amount);
+  
+  var test_input_volume_after_attack = test_input_volume + test_attack_amount * 0.9975;
+  
+  var purchased_token_amount = test_output_volume - cap / test_input_volume_after_attack;
+  
+  var test_input_volume_after_target = test_input_volume + test_attack_amount * 0.9975 + test_in_amount * 0.9975;
+  
+  var purchased_attacker_token_amount = cap / test_input_volume_after_attack - cap / test_input_volume_after_target;
+  
+  var test_output_volume_after_target = (test_output_volume - purchased_token_amount - purchased_attacker_token_amount) + purchased_token_amount * 0.9975;
+  
+  var input_profit = test_input_volume + test_attack_amount * 0.9975 + test_in_amount * 0.9975 - cap / test_output_volume_after_target - test_attack_amount;
+  
+  return input_profit;
+}
+
+console.log("profit", calc_profit_test());
 
 main();
 
